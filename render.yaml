@@ -1,6 +1,6 @@
 services:
-  - type: web
-    name: discord-bot
+  - type: worker
+    name: lgr-notif-bot
     env: node
     plan: free
     buildCommand: "npm install"
