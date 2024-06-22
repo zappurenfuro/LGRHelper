@@ -14,13 +14,7 @@ const clientId = process.env.CLIENT_ID;
 
 const facebookPageUrl = 'https://www.facebook.com/LGRIDofficial';
 
-let lastPostUrl = '';
-
-// Load the last sent post URL
-if (fs.existsSync('lastPostUrl.json')) {
-    const data = fs.readFileSync('lastPostUrl.json');
-    lastPostUrl = JSON.parse(data).url;
-}
+let lastPostUrl = null; // Store the last post URL in a variable
 
 // Load server configurations
 let serverConfigs = {};
@@ -30,10 +24,6 @@ if (fs.existsSync('serverConfigs.json')) {
 
 async function saveServerConfigs() {
     fs.writeFileSync('serverConfigs.json', JSON.stringify(serverConfigs));
-}
-
-async function saveLastPostUrl(url) {
-    fs.writeFileSync('lastPostUrl.json', JSON.stringify({ url }));
 }
 
 async function getLatestPost() {
@@ -63,8 +53,7 @@ async function getLatestPost() {
 async function checkForUpdates() {
     const latestPost = await getLatestPost();
     if (latestPost && latestPost.url !== lastPostUrl) {
-        lastPostUrl = latestPost.url;
-        await saveLastPostUrl(lastPostUrl);
+        lastPostUrl = latestPost.url; // Update the last post URL
 
         for (const guildId in serverConfigs) {
             const channelId = serverConfigs[guildId];
