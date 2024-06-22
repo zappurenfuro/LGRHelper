@@ -32,7 +32,7 @@ function generateHash(content) {
 
 async function getLatestPost() {
     try {
-        const response = await axios.get('https://lgrhelperapi.onrender.com/latest_post/');
+        const response = await axios.get('https://lgrhelperapi.onrender.com/latest_post');
         const post = response.data;
         if (!post) {
             return null;
