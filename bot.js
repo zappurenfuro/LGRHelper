@@ -1,6 +1,7 @@
 const { ApifyClient } = require('apify-client');
 const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes } = require('discord.js');
 const fs = require('fs');
+const http = require('http');
 require('dotenv').config();
 
 const apifyClient = new ApifyClient({
@@ -116,6 +117,17 @@ discordClient.once('ready', async () => {
     }
 
     setInterval(checkForUpdates, 60000); // Check every 60 seconds
+});
+
+// Dummy HTTP server to keep Render happy
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot is running\n');
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server is listening on port ${PORT}`);
 });
 
 discordClient.on('interactionCreate', async interaction => {
