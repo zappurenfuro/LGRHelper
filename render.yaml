@@ -7,8 +7,8 @@ services:
     startCommand: "npm start"
     envVars:
       - key: DISCORD_TOKEN
-        fromSecret: discord-token
+        value: ${DISCORD_TOKEN}
       - key: CLIENT_ID
-        fromSecret: client-id
+        value: ${CLIENT_ID}
       - key: APIFY_TOKEN
-        fromSecret: apify-token
+        value: ${APIFY_TOKEN}
