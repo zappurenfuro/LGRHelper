@@ -1,30 +1,49 @@
 const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, PermissionsBitField } = require('discord.js');
 const http = require('http');
-const fs = require('fs');
 const crypto = require('crypto');
 const axios = require('axios');
 require('dotenv').config();
-
-// Remove Apify client initialization
 
 const discordClient = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
 const discordToken = process.env.DISCORD_TOKEN;
 const clientId = process.env.CLIENT_ID;
 
-const facebookPageUrl = 'https://www.facebook.com/LGRIDofficial';
-
 let lastPostHash = null;
 let eventStats = null;
 
+const serverId = '1254063706812452945';
+const channelId = '1254066460939124826';
+const messageId = '1254186006454861835';
+
 let serverConfigs = {};
-if (fs.existsSync('serverConfigs.json')) {
-    serverConfigs = JSON.parse(fs.readFileSync('serverConfigs.json'));
-}
 
 async function saveServerConfigs() {
-    fs.writeFileSync('serverConfigs.json', JSON.stringify(serverConfigs));
+    const channel = await discordClient.channels.fetch(channelId);
+    const message = await channel.messages.fetch(messageId);
+    await message.edit(`\`\`\`json\n${JSON.stringify(serverConfigs, null, 2)}\n\`\`\``);
 }
+
+async function loadServerConfigs() {
+    const channel = await discordClient.channels.fetch(channelId);
+    const message = await channel.messages.fetch(messageId);
+    const content = message.content;
+
+    const jsonString = content.replace(/```json\n|```/g, '').trim();
+    console.log('Extracted JSON string:', jsonString);
+
+    if (jsonString.trim()) {
+        try {
+            serverConfigs = JSON.parse(jsonString);
+        } catch (error) {
+            console.error('Error parsing JSON:', error);
+            serverConfigs = {};
+        }
+    } else {
+        serverConfigs = {};
+    }
+}
+
 
 function generateHash(content) {
     return crypto.createHash('sha256').update(content).digest('hex');
@@ -108,6 +127,9 @@ discordClient.once('ready', async () => {
             { body: commands }
         );
         console.log('Successfully reloaded application (/) commands.');
+
+        // Load server configurations from the Discord message
+        await loadServerConfigs();
     } catch (error) {
         console.error(error);
     }
