@@ -1,13 +1,11 @@
-const { ApifyClient } = require('apify-client');
 const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, PermissionsBitField } = require('discord.js');
 const http = require('http');
 const fs = require('fs');
 const crypto = require('crypto');
+const axios = require('axios');
 require('dotenv').config();
 
-const apifyClient = new ApifyClient({
-    token: process.env.APIFY_TOKEN,
-});
+// Remove Apify client initialization
 
 const discordClient = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
@@ -33,24 +31,14 @@ function generateHash(content) {
 }
 
 async function getLatestPost() {
-    const input = {
-        "startUrls": [
-            {
-                "url": facebookPageUrl
-            }
-        ],
-        "resultsLimit": 1
-    };
-
     try {
-        const run = await apifyClient.actor("KoJrdxJCTtpon81KY").call(input);
-        const { items } = await apifyClient.dataset(run.defaultDatasetId).listItems();
-        if (items.length === 0) {
+        const response = await axios.get('https://lgrhelperapi.onrender.com/latest_post/');
+        const post = response.data;
+        if (!post) {
             return null;
         }
-        const post = items[0];
-        const hash = generateHash(post.text);
-        return { url: post.url, content: post.text, hash: hash };
+        const hash = generateHash(post.content);
+        return { url: post.url, content: post.content, hash: hash };
     } catch (error) {
         console.error('Error fetching the latest post:', error);
         return null;
@@ -124,7 +112,7 @@ discordClient.once('ready', async () => {
         console.error(error);
     }
 
-    setInterval(checkForUpdates, 60000);
+    setInterval(checkForUpdates, 120000);
 });
 
 // Dummy HTTP server to keep Render happy
@@ -193,12 +181,12 @@ discordClient.on('interactionCreate', async interaction => {
 
 discordClient.on('messageCreate', async message => {
     if (message.content.startsWith('!stats_add')) {
-        const regex = /!stats_add "([^"]+)" "([^"]+)" (\d+) (\d+)(?: \*(.*))?/;
+        const regex = /!stats_add "([^"]+)" "([^"]+)" "([^"]+)" "([^"]+)"(?: \*(.*))?/;
         const match = message.content.match(regex);
 
         if (match) {
             const [_, event, items, nGacha, nModal, optionalDesc] = match;
-            eventStats = `Modal diamond yang dibutuhkan untuk event ${event}.\n~\nItem : ${items}\nTotal Gacha : ${nGacha}x Gacha 🎁\nModal : ${nModal}k DM 💎\n~\n*Perlu diingat lagi ini angka cuma probabilitas aja, bisa kurang atau lebih.\n${optionalDesc ? `*${optionalDesc}` : ''}`;
+            eventStats = `Modal diamond yang dibutuhkan untuk event ${event}.\n~\nItem : ${items}\nTotal Gacha : ${nGacha}x Gacha 🎁\nModal : ${nModal} 💎\n~\n*Perlu diingat lagi ini angka cuma probabilitas aja, bisa kurang atau lebih.\n${optionalDesc ? `*${optionalDesc}` : ''}`;
             message.channel.send('Stats updated successfully.');
         } else {
             message.channel.send('Invalid format. Please use the correct format.');
