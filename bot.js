@@ -1,5 +1,5 @@
 const { ApifyClient } = require('apify-client');
-const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, PermissionsBitField } = require('discord.js');
 const http = require('http');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -16,9 +16,9 @@ const clientId = process.env.CLIENT_ID;
 
 const facebookPageUrl = 'https://www.facebook.com/LGRIDofficial';
 
-let lastPostHash = null; // Store the last post hash in a variable
+let lastPostHash = null;
+let eventStats = null;
 
-// Load server configurations
 let serverConfigs = {};
 if (fs.existsSync('serverConfigs.json')) {
     serverConfigs = JSON.parse(fs.readFileSync('serverConfigs.json'));
@@ -49,7 +49,7 @@ async function getLatestPost() {
             return null;
         }
         const post = items[0];
-        const hash = generateHash(post.text); // Generate hash of the post content
+        const hash = generateHash(post.text);
         return { url: post.url, content: post.text, hash: hash };
     } catch (error) {
         console.error('Error fetching the latest post:', error);
@@ -60,7 +60,7 @@ async function getLatestPost() {
 async function checkForUpdates() {
     const latestPost = await getLatestPost();
     if (latestPost && latestPost.hash !== lastPostHash) {
-        lastPostHash = latestPost.hash; // Update the last post hash
+        lastPostHash = latestPost.hash;
 
         for (const guildId in serverConfigs) {
             const channelId = serverConfigs[guildId];
@@ -68,11 +68,9 @@ async function checkForUpdates() {
 
             if (channel) {
                 try {
-                    // Tag @everyone and delete the message immediately
                     const everyoneTag = await channel.send('@everyone');
                     await everyoneTag.delete();
 
-                    // Send the update message
                     const embed = new EmbedBuilder()
                         .setTitle('New post on LINE Let\'s Get Rich Facebook page')
                         .setDescription(latestPost.content)
@@ -90,7 +88,6 @@ async function checkForUpdates() {
 discordClient.once('ready', async () => {
     console.log('Bot is online!');
 
-    // Register slash commands
     const commands = [
         {
             name: 'setup',
@@ -98,15 +95,20 @@ discordClient.once('ready', async () => {
             options: [
                 {
                     name: 'channel',
-                    type: 7, // Channel type
+                    type: 7,
                     description: 'The channel to send updates to',
                     required: true,
                 }
-            ]
+            ],
+            default_member_permissions: PermissionsBitField.Flags.Administrator.toString() // Administrator only
         },
         {
             name: 'checkupdate',
             description: 'Check the latest update manually'
+        },
+        {
+            name: 'stats',
+            description: 'Display the event stats'
         }
     ];
 
@@ -122,7 +124,7 @@ discordClient.once('ready', async () => {
         console.error(error);
     }
 
-    setInterval(checkForUpdates, 60000); // Check every 60 seconds
+    setInterval(checkForUpdates, 60000);
 });
 
 // Dummy HTTP server to keep Render happy
@@ -154,7 +156,7 @@ discordClient.on('interactionCreate', async interaction => {
 
     if (commandName === 'checkupdate') {
         try {
-            await interaction.deferReply(); // Acknowledge the interaction immediately
+            await interaction.deferReply();
             const latestPost = await getLatestPost();
             if (latestPost) {
                 const embed = new EmbedBuilder()
@@ -173,6 +175,33 @@ discordClient.on('interactionCreate', async interaction => {
             } else {
                 await interaction.reply({ content: 'There was an error while executing this command.', ephemeral: true });
             }
+        }
+    }
+
+    if (commandName === 'stats') {
+        if (eventStats) {
+            const embed = new EmbedBuilder()
+                .setTitle('Event Stats')
+                .setDescription(eventStats)
+                .setColor('#0099ff');
+            await interaction.reply({ embeds: [embed], ephemeral: false });
+        } else {
+            await interaction.reply({ content: 'No stats available. Use !stats_add to add stats.', ephemeral: true });
+        }
+    }
+});
+
+discordClient.on('messageCreate', async message => {
+    if (message.content.startsWith('!stats_add')) {
+        const regex = /!stats_add "([^"]+)" "([^"]+)" (\d+) (\d+)(?: \*(.*))?/;
+        const match = message.content.match(regex);
+
+        if (match) {
+            const [_, event, items, nGacha, nModal, optionalDesc] = match;
+            eventStats = `Modal diamond yang dibutuhkan untuk event ${event}.\n~\nItem : ${items}\nTotal Gacha : ${nGacha}x Gacha 🎁\nModal : ${nModal}k DM 💎\n~\n*Perlu diingat lagi ini angka cuma probabilitas aja, bisa kurang atau lebih.\n${optionalDesc ? `*${optionalDesc}` : ''}`;
+            message.channel.send('Stats updated successfully.');
+        } else {
+            message.channel.send('Invalid format. Please use the correct format.');
         }
     }
 });

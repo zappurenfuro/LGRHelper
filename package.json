@@ -13,6 +13,7 @@
     "apify-client": "^2.9.3",
     "discord.js": "^14.15.3",
     "dotenv": "^16.4.5",
+    "express": "^4.19.2",
     "puppeteer": "^22.12.0"
   }
 }
