@@ -16,6 +16,13 @@ const facebookPageUrl = 'https://www.facebook.com/LGRIDofficial';
 
 let lastPostUrl = '';
 
+// Load the last sent post URL
+if (fs.existsSync('lastPostUrl.json')) {
+    const data = fs.readFileSync('lastPostUrl.json');
+    lastPostUrl = JSON.parse(data).url;
+}
+
+// Load server configurations
 let serverConfigs = {};
 if (fs.existsSync('serverConfigs.json')) {
     serverConfigs = JSON.parse(fs.readFileSync('serverConfigs.json'));
@@ -23,6 +30,10 @@ if (fs.existsSync('serverConfigs.json')) {
 
 async function saveServerConfigs() {
     fs.writeFileSync('serverConfigs.json', JSON.stringify(serverConfigs));
+}
+
+async function saveLastPostUrl(url) {
+    fs.writeFileSync('lastPostUrl.json', JSON.stringify({ url }));
 }
 
 async function getLatestPost() {
@@ -53,6 +64,7 @@ async function checkForUpdates() {
     const latestPost = await getLatestPost();
     if (latestPost && latestPost.url !== lastPostUrl) {
         lastPostUrl = latestPost.url;
+        await saveLastPostUrl(lastPostUrl);
 
         for (const guildId in serverConfigs) {
             const channelId = serverConfigs[guildId];
@@ -60,9 +72,11 @@ async function checkForUpdates() {
 
             if (channel) {
                 try {
+                    // Tag @everyone and delete the message immediately
                     const everyoneTag = await channel.send('@everyone');
                     await everyoneTag.delete();
 
+                    // Send the update message
                     const embed = new EmbedBuilder()
                         .setTitle('New post on LINE Let\'s Get Rich Facebook page')
                         .setDescription(latestPost.content)
@@ -80,6 +94,7 @@ async function checkForUpdates() {
 discordClient.once('ready', async () => {
     console.log('Bot is online!');
 
+    // Register slash commands
     const commands = [
         {
             name: 'setup',
@@ -87,7 +102,7 @@ discordClient.once('ready', async () => {
             options: [
                 {
                     name: 'channel',
-                    type: 7,
+                    type: 7, // Channel type
                     description: 'The channel to send updates to',
                     required: true,
                 }
@@ -111,7 +126,7 @@ discordClient.once('ready', async () => {
         console.error(error);
     }
 
-    setInterval(checkForUpdates, 60000);
+    setInterval(checkForUpdates, 60000); // Check every 60 seconds
 });
 
 discordClient.on('interactionCreate', async interaction => {
@@ -123,21 +138,34 @@ discordClient.on('interactionCreate', async interaction => {
         const channel = interaction.options.getChannel('channel');
         serverConfigs[interaction.guildId] = channel.id;
         await saveServerConfigs();
-        await interaction.reply(`Updates will be sent to ${channel.name}`);
+        try {
+            await interaction.reply({ content: `Updates will be sent to ${channel.name}`, ephemeral: true });
+        } catch (error) {
+            console.error('Error replying to interaction:', error);
+        }
     }
 
     if (commandName === 'checkupdate') {
-        await interaction.deferReply();
-        const latestPost = await getLatestPost();
-        if (latestPost) {
-            const embed = new EmbedBuilder()
-                .setTitle('Latest post on LINE Let\'s Get Rich Facebook page')
-                .setDescription(latestPost.content)
-                .setURL(latestPost.url)
-                .setColor('#0099ff');
-            await interaction.editReply({ embeds: [embed] });
-        } else {
-            await interaction.editReply('Error: No posts found.');
+        try {
+            await interaction.deferReply(); // Acknowledge the interaction immediately
+            const latestPost = await getLatestPost();
+            if (latestPost) {
+                const embed = new EmbedBuilder()
+                    .setTitle('Latest post on LINE Let\'s Get Rich Facebook page')
+                    .setDescription(latestPost.content)
+                    .setURL(latestPost.url)
+                    .setColor('#0099ff');
+                await interaction.editReply({ embeds: [embed] });
+            } else {
+                await interaction.editReply('Error: No posts found.');
+            }
+        } catch (error) {
+            console.error('Error handling interaction:', error);
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply('There was an error while executing this command.');
+            } else {
+                await interaction.reply({ content: 'There was an error while executing this command.', ephemeral: true });
+            }
         }
     }
 });

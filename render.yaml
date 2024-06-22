@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: discord-bot
+    env: node
+    plan: free
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    envVars:
+      - key: DISCORD_TOKEN
+        fromSecret: discord-token
+      - key: CLIENT_ID
+        fromSecret: client-id
+      - key: APIFY_TOKEN
+        fromSecret: apify-token
