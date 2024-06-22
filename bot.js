@@ -1,7 +1,8 @@
 const { ApifyClient } = require('apify-client');
 const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes } = require('discord.js');
-const fs = require('fs');
 const http = require('http');
+const fs = require('fs');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const apifyClient = new ApifyClient({
@@ -15,7 +16,7 @@ const clientId = process.env.CLIENT_ID;
 
 const facebookPageUrl = 'https://www.facebook.com/LGRIDofficial';
 
-let lastPostUrl = null; // Store the last post URL in a variable
+let lastPostHash = null; // Store the last post hash in a variable
 
 // Load server configurations
 let serverConfigs = {};
@@ -25,6 +26,10 @@ if (fs.existsSync('serverConfigs.json')) {
 
 async function saveServerConfigs() {
     fs.writeFileSync('serverConfigs.json', JSON.stringify(serverConfigs));
+}
+
+function generateHash(content) {
+    return crypto.createHash('sha256').update(content).digest('hex');
 }
 
 async function getLatestPost() {
@@ -44,7 +49,8 @@ async function getLatestPost() {
             return null;
         }
         const post = items[0];
-        return { url: post.url, content: post.text };
+        const hash = generateHash(post.text); // Generate hash of the post content
+        return { url: post.url, content: post.text, hash: hash };
     } catch (error) {
         console.error('Error fetching the latest post:', error);
         return null;
@@ -53,8 +59,8 @@ async function getLatestPost() {
 
 async function checkForUpdates() {
     const latestPost = await getLatestPost();
-    if (latestPost && latestPost.url !== lastPostUrl) {
-        lastPostUrl = latestPost.url; // Update the last post URL
+    if (latestPost && latestPost.hash !== lastPostHash) {
+        lastPostHash = latestPost.hash; // Update the last post hash
 
         for (const guildId in serverConfigs) {
             const channelId = serverConfigs[guildId];
