@@ -10,18 +10,27 @@ const discordToken = process.env.DISCORD_TOKEN;
 const clientId = process.env.CLIENT_ID;
 
 let lastPostHash = null;
+let lastUpdateHash = null;
 let eventStats = null;
 
 const serverId = '1254063706812452945';
 const channelId = '1254066460939124826';
 const messageId = '1254186006454861835';
+const messageId2 = '1254483632953884803';
 
 let serverConfigs = {};
+let updateConfigs = {};
 
 async function saveServerConfigs() {
     const channel = await discordClient.channels.fetch(channelId);
     const message = await channel.messages.fetch(messageId);
     await message.edit(`\`\`\`json\n${JSON.stringify(serverConfigs, null, 2)}\n\`\`\``);
+}
+
+async function saveUpdateConfigs() {
+    const channel = await discordClient.channels.fetch(channelId);
+    const message = await channel.messages.fetch(messageId2);
+    await message.edit(`\`\`\`json\n${JSON.stringify(updateConfigs, null, 2)}\n\`\`\``);
 }
 
 async function loadServerConfigs() {
@@ -44,9 +53,38 @@ async function loadServerConfigs() {
     }
 }
 
+async function loadUpdateConfigs() {
+    const channel = await discordClient.channels.fetch(channelId);
+    const message = await channel.messages.fetch(messageId2);
+    const content = message.content;
+
+    const jsonString = content.replace(/```json\n|```/g, '').trim();
+    console.log('Extracted JSON string:', jsonString);
+
+    if (jsonString.trim()) {
+        try {
+            updateConfigs = JSON.parse(jsonString);
+        } catch (error) {
+            console.error('Error parsing JSON:', error);
+            updateConfigs = {};
+        }
+    } else {
+        updateConfigs = {};
+    }
+}
 
 function generateHash(content) {
     return crypto.createHash('sha256').update(content).digest('hex');
+}
+
+function convertHtmlToDiscordFormat(html) {
+    let formatted = html.replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<b>(.*?)<\/b>/gi, '**$1**')
+        .replace(/<i>(.*?)<\/i>/gi, '*$1*')
+        .replace(/<u>(.*?)<\/u>/gi, '__$1__')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&');
+    return formatted;
 }
 
 async function getLatestPost() {
@@ -60,6 +98,21 @@ async function getLatestPost() {
         return { url: post.url, content: post.content, hash: hash };
     } catch (error) {
         console.error('Error fetching the latest post:', error);
+        return null;
+    }
+}
+
+async function getLatestUpdates() {
+    try {
+        const response = await axios.get('https://lgr-helperapi.onrender.com/latest_posts');
+        const posts = response.data;
+        if (!posts || posts.length === 0) {
+            return null;
+        }
+        const hashes = posts.map(post => generateHash(post.content));
+        return { posts, hashes };
+    } catch (error) {
+        console.error('Error fetching the latest updates:', error);
         return null;
     }
 }
@@ -80,7 +133,7 @@ async function checkForUpdates() {
 
                     const embed = new EmbedBuilder()
                         .setTitle('New post on LINE Let\'s Get Rich Facebook page')
-                        .setDescription(latestPost.content)
+                        .setDescription(convertHtmlToDiscordFormat(latestPost.content))
                         .setURL(latestPost.url)
                         .setColor('#0099ff');
                     await channel.send({ embeds: [embed] });
@@ -90,6 +143,61 @@ async function checkForUpdates() {
             }
         }
     }
+}
+
+async function checkForNewUpdates() {
+    const latestUpdatesData = await getLatestUpdates();
+    if (latestUpdatesData) {
+        const { posts, hashes } = latestUpdatesData;
+        if (!lastUpdateHash || !hashes.includes(lastUpdateHash)) {
+            lastUpdateHash = hashes[0];
+
+            for (const guildId in updateConfigs) {
+                const channelId = updateConfigs[guildId];
+                const channel = discordClient.channels.cache.get(channelId);
+
+                if (channel) {
+                    try {
+                        const everyoneTag = await channel.send('@everyone');
+                        await everyoneTag.delete();
+
+                        for (const post of posts) {
+                            const content = convertHtmlToDiscordFormat(post.content);
+                            const parts = splitMessage(content, 4096);
+                            for (const part of parts) {
+                                const embed = new EmbedBuilder()
+                                    .setTitle(post.title)
+                                    .setDescription(part)
+                                    .setColor('#0099ff');
+                                await channel.send({ embeds: [embed] });
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`Error sending message to channel ${channelId} in guild ${guildId}:`, error);
+                    }
+                }
+            }
+        }
+    }
+}
+
+function splitMessage(content, maxLength) {
+    const parts = [];
+    let currentPart = '';
+    const lines = content.split('\n');
+
+    for (const line of lines) {
+        if ((currentPart + line).length > maxLength) {
+            parts.push(currentPart);
+            currentPart = '';
+        }
+        currentPart += line + '\n';
+    }
+    if (currentPart) {
+        parts.push(currentPart);
+    }
+
+    return parts;
 }
 
 discordClient.once('ready', async () => {
@@ -108,6 +216,23 @@ discordClient.once('ready', async () => {
                 }
             ],
             default_member_permissions: PermissionsBitField.Flags.Administrator.toString() // Administrator only
+        },
+        {
+            name: 'setup_update',
+            description: 'Setup the channel for update notifications',
+            options: [
+                {
+                    name: 'channel',
+                    type: 7,
+                    description: 'The channel to send update notifications to',
+                    required: true,
+                }
+            ],
+            default_member_permissions: PermissionsBitField.Flags.Administrator.toString() // Administrator only
+        },
+        {
+            name: 'checknews',
+            description: 'Check the latest news manually'
         },
         {
             name: 'checkupdate',
@@ -130,11 +255,13 @@ discordClient.once('ready', async () => {
 
         // Load server configurations from the Discord message
         await loadServerConfigs();
+        await loadUpdateConfigs();
     } catch (error) {
         console.error(error);
     }
 
     setInterval(checkForUpdates, 120000);
+    setInterval(checkForNewUpdates, 120000);
 });
 
 // Dummy HTTP server to keep Render happy
@@ -164,19 +291,61 @@ discordClient.on('interactionCreate', async interaction => {
         }
     }
 
-    if (commandName === 'checkupdate') {
+    if (commandName === 'setup_update') {
+        const channel = interaction.options.getChannel('channel');
+        updateConfigs[interaction.guildId] = channel.id;
+        await saveUpdateConfigs();
+        try {
+            await interaction.reply({ content: `Update notifications will be sent to ${channel.name}`, ephemeral: true });
+        } catch (error) {
+            console.error('Error replying to interaction:', error);
+        }
+    }
+
+    if (commandName === 'checknews') {
         try {
             await interaction.deferReply();
             const latestPost = await getLatestPost();
             if (latestPost) {
                 const embed = new EmbedBuilder()
                     .setTitle('Latest post on LINE Let\'s Get Rich Facebook page')
-                    .setDescription(latestPost.content)
+                    .setDescription(convertHtmlToDiscordFormat(latestPost.content))
                     .setURL(latestPost.url)
                     .setColor('#0099ff');
                 await interaction.editReply({ embeds: [embed] });
             } else {
                 await interaction.editReply('Error: No posts found.');
+            }
+        } catch (error) {
+            console.error('Error handling interaction:', error);
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply('There was an error while executing this command.');
+            } else {
+                await interaction.reply({ content: 'There was an error while executing this command.', ephemeral: true });
+            }
+        }
+    }
+
+    if (commandName === 'checkupdate') {
+        try {
+            await interaction.deferReply();
+            const latestUpdatesData = await getLatestUpdates();
+            if (latestUpdatesData) {
+                const { posts } = latestUpdatesData;
+                for (const post of posts) {
+                    const content = convertHtmlToDiscordFormat(post.content);
+                    const parts = splitMessage(content, 4096);
+                    for (const part of parts) {
+                        const embed = new EmbedBuilder()
+                            .setTitle(post.title)
+                            .setDescription(part)
+                            .setColor('#0099ff');
+                        await interaction.followUp({ embeds: [embed] });
+                    }
+                }
+                await interaction.editReply({ content: 'Updates retrieved successfully.', ephemeral: true });
+            } else {
+                await interaction.editReply('Error: No updates found.');
             }
         } catch (error) {
             console.error('Error handling interaction:', error);
