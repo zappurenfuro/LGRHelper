@@ -6,7 +6,7 @@ LGR Helper is a Discord bot designed to fetch and post updates from the LINE Let
 
 | Command       | Description                    | Usage                                                                                      | Permissions       |
 |---------------|--------------------------------|--------------------------------------------------------------------------------------------|-------------------|
-| `/setup`      | Setup the channel for updates  | `/setup channel:<channel>`                                                                 | Administrator only|
+| `/setup`      | Setup the channel for updates  | `/setup channel:<channel>`                                                                 | Administrator      |
 | `/checkupdate`| Check the latest update manually| `/checkupdate`                                                                             | None              |
 | `/stats`      | Display the event stats        | `/stats`                                                                                   | None              |
 
