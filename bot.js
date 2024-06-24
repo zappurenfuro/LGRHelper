@@ -261,7 +261,7 @@ discordClient.once('ready', async () => {
     }
 
     setInterval(checkForUpdates, 120000);
-    setInterval(checkForNewUpdates, 120000);
+    setInterval(checkForNewUpdates, 300000);
 });
 
 // Dummy HTTP server to keep Render happy
